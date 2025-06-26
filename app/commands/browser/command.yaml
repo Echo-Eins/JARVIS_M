@@ -1,0 +1,76 @@
+list:
+- command:
+    action: ahk
+    exe_path: ahk/Run browser.exe
+  voice:
+    sounds:
+    - ok1
+    - ok2
+    - ok3
+  phrases:
+  - открой браузер
+  - открой хром
+  - гугл хром
+
+- command:
+    action: ahk
+    exe_path: ahk/Close browser.exe
+  voice:
+    sounds:
+    - ok1
+    - ok2
+    - ok3
+    - ok4
+  phrases:
+  - закрой все браузеры
+  - закрой браузер
+  - выключи браузер
+  - убери браузер
+
+- command:
+    action: ahk
+    exe_path: ahk/Run website.exe
+    exe_args:
+    - http://google.com
+  voice:
+    sounds:
+    - ok1
+    - ok2
+    - ok3
+    - ok4
+  phrases:
+  - открой гугл
+  - запусти гугл
+  - перейди в гугл
+
+- command:
+    action: ahk
+    exe_path: ahk/Run website.exe
+    exe_args:
+    - http://youtube.com
+  voice:
+    sounds:
+    - ok1
+    - ok2
+    - ok3
+    - ok4
+  phrases:
+  - открой ютуб
+  - ютуб
+  - запусти ютуб
+
+- command:
+    action: ahk
+    exe_path: ahk/Run website.exe
+    exe_args:
+    - https://translate.google.com
+  voice:
+    sounds:
+    - ok1
+    - ok2
+    - ok3
+    - ok4
+  phrases:
+  - открой переводчик
+  - переводчик
+  - запусти переводчик
