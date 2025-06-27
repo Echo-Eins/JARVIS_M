@@ -1,0 +1,88 @@
+# gui/src-tauri/Cargo.toml - Обновленный с всеми зависимостями
+
+[package]
+name = "jarvis"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "1.0", features = [] }
+
+[dependencies]
+tauri = { version = "1.0", features = ["api-all"] }
+
+# Основные зависимости
+serde = { version = "1.0.164", features = ["derive"] }
+serde_json = "1.0.96"
+log = "0.4.18"
+once_cell = "1.18.0"
+
+# Аудио система
+hound = "3.5.0"
+rodio = "0.17.1"
+kira = "0.8.5"
+
+# Записывающие устройства  
+pv_recorder = "1.1.2"
+portaudio = "0.7.0"
+
+# Wake-word detection
+pv_porcupine = "2.2.1"
+rustpotter = "2.0.0"
+vosk = "0.2.0"
+
+# Строки и последовательности
+seqdiff = "0.3.0"
+rand = "0.8.5"
+
+# Конфигурация и файловая система
+platform-dirs = "0.3.0"
+dirs = "5.0"
+
+# Логирование
+simple-log = "1.6.0"
+
+# Многопоточность и синхронизация
+arc-swap = "1.6.0"
+atomic_enum = "0.2.0"
+
+# HTTP клиент для AI запросов
+reqwest = { version = "0.11", features = ["json", "stream"] }
+tokio = { version = "1.0", features = ["full"] }
+urlencoding = "2.1"
+
+# Время и даты
+chrono = { version = "0.4", features = ["serde"] }
+
+# Системный трей
+tray-icon = "0.8"
+image = "0.24"
+winit = "0.28"
+
+# Обработка сигналов
+[target.'cfg(unix)'.dependencies]
+signal-hook = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["wincon", "consoleapi"] }
+
+# Дополнительные утилиты
+thiserror = "1.0"
+anyhow = "1.0"
+
+[features]
+# Основные функции
+default = ["custom-protocol"]
+
+# Пользовательский протокол для production сборок
+custom-protocol = []
+
+# Экспериментальные функции
+experimental-local-ai = []
+experimental-gpu-acceleration = []
+experimental-voice-training = []
+
+# Опциональные интеграции
+integration-home-assistant = []
+integration-spotify = []
+integration-office365 = []
