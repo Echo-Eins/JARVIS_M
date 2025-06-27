@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.3",
   "type": "module",
+  "description": "JARVIS Voice Assistant - Advanced AI-powered voice control system",
   "scripts": {
     "dev": "routify -c dev:vite",
     "dev:routify": "routify",
@@ -10,7 +11,9 @@
     "build": "svelte-check && routify -b && vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
   },
   "dependencies": {
     "@svelteuidev/composables": "^0.11.1",
@@ -35,5 +38,26 @@
     "typescript": "^4.9.5",
     "vite": "^4.2.1",
     "vite-tsconfig-paths": "^4.2.0"
-  }
+  },
+  "keywords": [
+    "voice-assistant",
+    "ai",
+    "jarvis",
+    "speech-recognition",
+    "text-to-speech",
+    "automation",
+    "tauri",
+    "svelte",
+    "rust"
+  ],
+  "author": "Abraham Tugalov",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Priler/jarvis.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Priler/jarvis/issues"
+  },
+  "homepage": "https://github.com/Priler/jarvis#readme"
 }

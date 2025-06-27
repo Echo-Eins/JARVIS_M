@@ -1,48 +1,33 @@
-// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+// Prevent console window on Windows
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::path::PathBuf;
+use tauri::Manager;
 
-use once_cell::sync::OnceCell;
-use platform_dirs::{AppDirs};
-
-// expose the config
+mod audio;
+mod ai;
+mod commands;
+mod db;
+mod errors;
 mod config;
 
-// include log
-#[macro_use]
-extern crate simple_log;
-mod log;
+use error::JarvisResult;
 
-// include db
-mod db;
+#[tauri::command]
+async fn init_jarvis() -> Result<String, String> {
+    // Инициализация всех систем
+    Ok("JARVIS initialized".to_string())
+}
 
-// include tray
-mod tray;
-
-// include tauri commands
-// mod tauri_commands;
-
-// some global data
-static APP_DIRS: OnceCell<AppDirs> = OnceCell::new();
-static APP_CONFIG_DIR: OnceCell<PathBuf> = OnceCell::new();
-static APP_LOG_DIR: OnceCell<PathBuf> = OnceCell::new();
-static DB: OnceCell<db::structs::Settings> = OnceCell::new();
-
-fn main() -> Result<(), String> {
-    // initialize directories
-    config::init_dirs()?;
-
-    // initialize logging
-    log::init_logging()?;
-
-    // log some base info
-    info!("Starting Jarvis v{} ...", config::APP_VERSION.unwrap());
-    info!("Config directory is: {}", APP_CONFIG_DIR.get().unwrap().display());
-    info!("Log directory is: {}", APP_LOG_DIR.get().unwrap().display());
-
-    // initialize database (settings)
-    DB.set(db::init_settings());
-
-    Ok(())
+fn main() {
+    tauri::Builder::default()
+        .setup(|app| {
+            // Инициализация при запуске
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            init_jarvis,
+            // Все команды из модулей
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }

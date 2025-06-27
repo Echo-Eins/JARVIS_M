@@ -1,0 +1,9 @@
+[workspace]
+members = ["src-tauri"]
+resolver = "2"
+
+[workspace.dependencies]
+# Общие зависимости для всего workspace
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.0", features = ["full"] }
+log = "0.4"
