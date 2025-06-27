@@ -28,7 +28,7 @@ portaudio = "0.7.0"
 
 # Wake-word detection
 pv_porcupine = "2.2.1"
-rustpotter = "2.0.0"
+rustpotter = "3.0.2"
 vosk = "0.2.0"
 
 # Строки и последовательности

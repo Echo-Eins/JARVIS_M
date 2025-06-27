@@ -5,7 +5,7 @@ use std::fs;
 use std::process::Command;
 use std::collections::HashMap;
 
-use crate::errors::{JarvisResult, JarvisError};
+use crate::error::{JarvisResult, JarvisError};
 
 // Поддерживаемые типы документов
 const DOCUMENT_EXTENSIONS: &[&str] = &[

@@ -3,15 +3,15 @@ use vosk::{DecodingState, Model, Recognizer};
 
 use std::sync::Mutex;
 
-use crate::config::VOSK_MODEL_PATH;
-
 static MODEL: OnceCell<Model> = OnceCell::new();
 static RECOGNIZER: OnceCell<Mutex<Recognizer>> = OnceCell::new();
 
 pub fn init_vosk() {
     if !RECOGNIZER.get().is_none() {return;} // already initialized
 
-    let model = Model::new(VOSK_MODEL_PATH).unwrap();
+    let model_path = crate::config::get_vosk_model_path()
+        .map_err(|_| "Failed to get Vosk model path")?;
+    let model = Model::new(model_path.to_str().unwrap()).unwrap();
     let mut recognizer = Recognizer::new(&model, 16000.0).unwrap();
 
     recognizer.set_max_alternatives(10);

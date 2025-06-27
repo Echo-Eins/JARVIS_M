@@ -20,7 +20,10 @@ pub fn init() -> Result<(), ()> {
     }
 
     // create porcupine instance with the given API key
-    match PorcupineBuilder::new_with_keyword_paths(picovoice_api_key, &[Path::new(config::KEYWORDS_PATH).join(config::DEFAULT_KEYWORD)])
+    let keywords_dir = crate::config::get_keywords_path()?;
+    let keyword_path = keywords_dir.join(config::DEFAULT_KEYWORD);
+
+    match PorcupineBuilder::new_with_keyword_paths(picovoice_api_key, &[keyword_path])
         .sensitivities(&[config::DEFAULT_SENSITIVITY]) // set sensitivity
         .init() {
             Ok(pinstance) => {

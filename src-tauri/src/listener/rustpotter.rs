@@ -19,14 +19,20 @@ pub fn init() -> Result<(), ()> {
             // success
             // wake word files list
             // @TODO. Make it configurable via GUI for custom user voice.
-            let rustpotter_wake_word_files: [&str; 5] = [
-                "rustpotter/jarvis-default.rpw",
-                "rustpotter/jarvis-community-1.rpw",
-                "rustpotter/jarvis-community-2.rpw",
-                "rustpotter/jarvis-community-3.rpw",
-                "rustpotter/jarvis-community-4.rpw",
-                // "rustpotter/jarvis-community-5.rpw",
+            let rustpotter_dir = crate::config::get_rustpotter_path()?;
+
+            let rustpotter_wake_word_files = [
+                rustpotter_dir.join("jarvis-default.rpw"),
+                rustpotter_dir.join("jarvis-community-1.rpw"),
+                rustpotter_dir.join("jarvis-community-2.rpw"),
+                rustpotter_dir.join("jarvis-community-3.rpw"),
+                rustpotter_dir.join("jarvis-community-4.rpw"),
             ];
+
+            // load wake word files
+            for rpw_path in rustpotter_wake_word_files {
+                rinstance.add_wakeword_from_file(&rpw_path).unwrap();
+            }
 
             // load wake word files
             for rpw in rustpotter_wake_word_files {

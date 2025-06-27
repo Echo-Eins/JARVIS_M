@@ -84,32 +84,26 @@ pub fn play_sound(filename: &PathBuf) -> JarvisResult<()> {
 }
 
 /// Получение директории со звуками
+/// Получение директории со звуками
 pub fn get_sound_directory() -> JarvisResult<PathBuf> {
-    let db = DB.get()
+    // Сначала пытаемся получить из ресурсов
+    if let Ok(resource_sound_dir) = config::get_sound_directory() {
+        if resource_sound_dir.exists() {
+            return Ok(resource_sound_dir);
+        }
+    }
+
+    // Fallback для режима разработки
+    let fallback_sound_dir = SOUND_DIR.get()
         .ok_or_else(|| JarvisError::AudioError(AudioError::InitializationFailed(
-            "Database not initialized".to_string()
+            "Sound directory not initialized".to_string()
         )))?;
 
-    let voice = &db.voice;
-    let voice_path = SOUND_DIR.join(voice);
-
-    // Проверяем существование директории для выбранного голоса
-    if voice_path.exists() && voice_path != *SOUND_DIR {
-        return Ok(voice_path);
-    }
-
-    // Используем голос по умолчанию
-    let default_voice_path = SOUND_DIR.join(config::DEFAULT_VOICE);
-    if default_voice_path.exists() {
-        return Ok(default_voice_path);
-    }
-
-    // Если ничего не найдено, возвращаем базовую директорию
-    if SOUND_DIR.exists() {
-        Ok(SOUND_DIR.clone())
+    if fallback_sound_dir.exists() {
+        Ok(fallback_sound_dir.clone())
     } else {
         Err(JarvisError::AudioError(AudioError::FileNotFound(
-            format!("Sound directory not found: {}", SOUND_DIR.display())
+            format!("Sound directory not found: {}", fallback_sound_dir.display())
         )))
     }
 }

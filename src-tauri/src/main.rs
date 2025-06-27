@@ -45,7 +45,18 @@ extern crate simple_log;
 
 // Глобальные переменные
 static APP_DIR: Lazy<PathBuf> = Lazy::new(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-static SOUND_DIR: Lazy<PathBuf> = Lazy::new(|| APP_DIR.clone().join("sound"));
+static SOUND_DIR: OnceCell<PathBuf> = OnceCell::new();
+
+// В функции initialize_configuration() ДОБАВИТЬ:
+pub fn initialize_sound_dir() -> JarvisResult<()> {
+    let sound_dir = config::get_sound_directory()?;
+    SOUND_DIR.set(sound_dir).map_err(|_| {
+        JarvisError::ConfigError(error::ConfigError::DirectoryCreationFailed(
+            "SOUND_DIR already initialized".to_string()
+        ))
+    })?;
+    Ok(())
+}
 static APP_DIRS: OnceCell<AppDirs> = OnceCell::new();
 static APP_CONFIG_DIR: OnceCell<PathBuf> = OnceCell::new();
 static APP_LOG_DIR: OnceCell<PathBuf> = OnceCell::new();
@@ -111,6 +122,7 @@ fn initialize_configuration() -> JarvisResult<()> {
     info!("Initializing configuration...");
 
     config::init_dirs()?;
+    initialize_sound_dir()?;
     // config::validate_config()?; // Добавим позже если нужно
 
     info!("✅ Configuration initialized");

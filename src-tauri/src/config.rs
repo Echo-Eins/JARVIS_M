@@ -2,7 +2,8 @@
 
 pub mod structs;
 use structs::{WakeWordEngine, SpeechToTextEngine, RecorderType, AudioType};
-
+use tauri::api::path::resource_dir;
+use std::path::PathBuf;
 use std::fs;
 use std::env;
 use std::path::PathBuf;
@@ -265,14 +266,63 @@ pub const RUSTPOTTER_DEFAULT_CONFIG: Lazy<RustpotterConfig> = Lazy::new(|| {
 });
 
 // PICOVOICE
-pub const COMMANDS_PATH: &str = "commands/";
-pub const KEYWORDS_PATH: &str = "picovoice/keywords/";
+
+
 pub const DEFAULT_KEYWORD: &str = "jarvis_windows.ppn";
 pub const DEFAULT_SENSITIVITY: f32 = 1.0;
 
+// НОВЫЕ функции (ДОБАВИТЬ):
+use tauri::api::path::resource_dir;
+use tauri::Env;
+
+/// Получение пути к директории команд
+pub fn get_commands_path() -> JarvisResult<PathBuf> {
+    let resource_dir = resource_dir(&tauri::generate_context!().config())
+        .ok_or_else(|| JarvisError::ConfigError(ConfigError::FileNotFound(
+            "Resource directory not found".to_string()
+        )))?;
+    Ok(resource_dir.join("commands"))
+}
+
+/// Получение пути к директории ключевых слов Picovoice
+pub fn get_keywords_path() -> JarvisResult<PathBuf> {
+    let resource_dir = resource_dir(&tauri::generate_context!().config())
+        .ok_or_else(|| JarvisError::ConfigError(ConfigError::FileNotFound(
+            "Resource directory not found".to_string()
+        )))?;
+    Ok(resource_dir.join("picovoice").join("keywords"))
+}
+
+/// Получение пути к модели Vosk
+pub fn get_vosk_model_path() -> JarvisResult<PathBuf> {
+    let resource_dir = resource_dir(&tauri::generate_context!().config())
+        .ok_or_else(|| JarvisError::ConfigError(ConfigError::FileNotFound(
+            "Resource directory not found".to_string()
+        )))?;
+    Ok(resource_dir.join("vosk").join("model_small"))
+}
+
+/// Получение пути к директории звуков
+pub fn get_sound_directory() -> JarvisResult<PathBuf> {
+    let resource_dir = resource_dir(&tauri::generate_context!().config())
+        .ok_or_else(|| JarvisError::ConfigError(ConfigError::FileNotFound(
+            "Resource directory not found".to_string()
+        )))?;
+    Ok(resource_dir.join("sound"))
+}
+
+/// Получение пути к директории Rustpotter
+pub fn get_rustpotter_path() -> JarvisResult<PathBuf> {
+    let resource_dir = resource_dir(&tauri::generate_context!().config())
+        .ok_or_else(|| JarvisError::ConfigError(ConfigError::FileNotFound(
+            "Resource directory not found".to_string()
+        )))?;
+    Ok(resource_dir.join("rustpotter"))
+}
+
 // VOSK
 pub const VOSK_FETCH_PHRASE: &str = "джарвис";
-pub const VOSK_MODEL_PATH: &str = "vosk/model_small";
+
 pub const VOSK_MIN_RATIO: f64 = 70.0;
 
 // ETC

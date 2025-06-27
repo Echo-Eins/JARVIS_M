@@ -20,7 +20,8 @@ pub fn parse_commands() -> Result<Vec<AssistantCommand>, String> {
     let mut commands: Vec<AssistantCommand> = vec![];
 
     // read commands directories first
-    if let Ok(cpaths) = fs::read_dir(config::COMMANDS_PATH) {
+    let commands_dir = crate::config::get_commands_path()?;
+    if let Ok(cpaths) = fs::read_dir(commands_dir) {
         for cpath in cpaths {
             // validate this command, check if required files exists
             let _cpath = cpath.unwrap().path();
