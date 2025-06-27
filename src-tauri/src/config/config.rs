@@ -118,7 +118,7 @@ fn ensure_directory_exists(mut dir: PathBuf, dir_type: &str) -> JarvisResult<Pat
 }
 
 /// Проверка корректности конфигурации
-pub fn validate_config() -> JarvisResult<()> {
+pub fn validate_configuration() -> JarvisResult<()> {
     // Проверяем, что все необходимые директории инициализированы
     if APP_CONFIG_DIR.get().is_none() {
         return Err(JarvisError::ConfigError(ConfigError::MissingRequiredSetting(
