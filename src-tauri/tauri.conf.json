@@ -42,11 +42,11 @@
         "vosk/model_small",
         "picovoice",
         "rustpotter",
-        "libvosk.dll",
-        "libstdc++-6.dll",
-        "libwinpthread-1.dll",
-        "libgcc_s_seh-1.dll",
-        "libvosk.lib"
+        "resources/libvosk.dll",
+        "resources/libstdc++-6.dll",
+        "resources/libwinpthread-1.dll",
+        "resources/libgcc_s_seh-1.dll",
+        "resources/libvosk.lib"
       ]
     },
     "security": {
