@@ -4,9 +4,9 @@ use std::sync::Mutex;
 use once_cell::sync::OnceCell;
 use rustpotter::{Rustpotter, RustpotterConfig, WavFmt, DetectorConfig, FiltersConfig, ScoreMode, GainNormalizationConfig, BandPassConfig};
 
-use crate::DB;
+use crate::db;
 use crate::config;
-
+use log::{warn, info, error};
 // store rustpotter instance
 static RUSTPOTTER: OnceCell<Mutex<Rustpotter>> = OnceCell::new();
 

@@ -3,8 +3,9 @@ use std::path::Path;
 use once_cell::sync::OnceCell;
 use porcupine::{Porcupine, PorcupineBuilder};
 
-use crate::DB;
+use crate::db;
 use crate::config;
+use log::{info, warn, error};
 
 // store porcupine instance
 static PORCUPINE: OnceCell<Porcupine> = OnceCell::new();
@@ -13,7 +14,7 @@ pub fn init() -> Result<(), ()> {
     let picovoice_api_key: String;
 
     // retrieve picovoice api key
-    picovoice_api_key = DB.get().unwrap().api_keys.picovoice.clone();
+    picovoice_api_key = db.get().unwrap().api_keys.picovoice.clone();
     if picovoice_api_key.trim().is_empty() {
         warn!("Picovoice API key is not set.");
         return Err(())

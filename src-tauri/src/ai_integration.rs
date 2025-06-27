@@ -7,8 +7,8 @@ use reqwest::{Client, header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TY
 use tokio::time::timeout;
 
 use crate::error::{JarvisResult, JarvisError};
-use crate::{DB, tts};
-
+use crate::{db, tts};
+use log::{info, warn};
 // Конфигурация AI сервисов
 #[derive(Debug, Clone)]
 pub struct AiConfig {
@@ -127,7 +127,7 @@ impl AiManager {
     fn load_config() -> JarvisResult<AiConfig> {
         let mut config = AiConfig::default();
 
-        if let Some(db) = DB.get() {
+        if let Some(db) = db.get() {
             // Загружаем API ключи
             config.openai_api_key = db.api_keys.openai.clone();
 

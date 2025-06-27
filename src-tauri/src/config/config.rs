@@ -2,7 +2,7 @@
 
 use super::structs::{WakeWordEngine, SpeechToTextEngine, RecorderType, AudioType};
 use log::{info, warn, error};
-use tauri::api::path::resource_dir;
+
 use std::path::PathBuf;
 use std::fs;
 use std::env;

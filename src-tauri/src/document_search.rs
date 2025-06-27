@@ -6,7 +6,8 @@ use std::process::Command;
 use std::collections::HashMap;
 
 use crate::error::{JarvisResult, JarvisError};
-
+use log::{info, warn};
+use tempfile::*;
 // Поддерживаемые типы документов
 const DOCUMENT_EXTENSIONS: &[&str] = &[
     ".pdf", ".doc", ".docx", ".txt", ".rtf",

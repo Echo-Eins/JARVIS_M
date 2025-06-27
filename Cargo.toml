@@ -1,6 +1,7 @@
 [workspace]
 members = ["src-tauri"]
 resolver = "2"
+default-members = ["src-tauri"]
 
 # Определяем workspace как пакет для корректной работы IDE
 [package]

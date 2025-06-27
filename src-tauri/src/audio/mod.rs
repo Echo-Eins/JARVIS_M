@@ -2,6 +2,11 @@
 
 pub mod audio_monitor;
 pub mod recorder;
+pub mod pvrecorder;
+pub mod portaudio;
+pub mod kira;
+pub mod cpal;
+pub mod rodio;
 
 // Re-export main functions
 pub use audio_monitor::*;

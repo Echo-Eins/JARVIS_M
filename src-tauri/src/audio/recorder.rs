@@ -7,7 +7,7 @@ use super::pvrecorder;
 use once_cell::sync::OnceCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::{DB, config, config::structs::RecorderType};
+use crate::{db, config, config::structs::RecorderType};
 use crate::error::{JarvisResult, JarvisError, RecorderError};
 use log::{info, warn, error};
 static RECORDER_TYPE: OnceCell<RecorderType> = OnceCell::new();
@@ -217,7 +217,7 @@ pub fn stop_recording() -> JarvisResult<()> {
 
 /// Получение индекса выбранного микрофона с проверкой
 pub fn get_selected_microphone_index() -> JarvisResult<i32> {
-    let db = DB.get()
+    let db = db.get()
         .ok_or_else(|| JarvisError::RecorderError(RecorderError::InitializationFailed(
             "Database not initialized".to_string()
         )))?;

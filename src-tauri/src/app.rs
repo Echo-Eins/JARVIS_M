@@ -1,9 +1,11 @@
 // app/src/app.rs - Исправленный основной цикл приложения
 
 use std::time::SystemTime;
-use crate::{config, audio, recorder, listener, stt, commands, COMMANDS_LIST, should_shutdown, error, db};
+use crate::{config, audio, listener, stt, commands, COMMANDS_LIST, should_shutdown, error, db};
 use crate::error::{JarvisResult, JarvisError};
 use rand::seq::SliceRandom;
+use log::{info, warn, error};
+use audio::recorder::*;
 
 /// Основная функция запуска приложения
 pub fn start() -> JarvisResult<()> {

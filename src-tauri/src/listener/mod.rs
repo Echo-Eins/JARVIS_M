@@ -10,7 +10,7 @@ use crate::error::JarvisResult;
 
 pub fn init() -> JarvisResult<()> {
     // Initialize default wake word engine
-    rustpotter::init()
+    rustpotter::init();
 }
 
 pub fn shutdown() -> JarvisResult<()> {

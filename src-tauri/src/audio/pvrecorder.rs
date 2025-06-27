@@ -1,6 +1,7 @@
 use once_cell::sync::OnceCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 use pv_recorder::{Recorder, RecorderBuilder};
+use log::{error, info};
 
 static RECORDER: OnceCell<Recorder> = OnceCell::new();
 static IS_RECORDING: AtomicBool = AtomicBool::new(false);

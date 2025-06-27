@@ -1,5 +1,5 @@
 use crate::{config, stt};
-
+use log::info;
 pub fn init() -> Result<(), ()> {
     Ok(()) // nothing to init for Vosk
 }
