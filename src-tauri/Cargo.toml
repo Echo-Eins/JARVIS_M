@@ -1,15 +1,22 @@
-# gui/src-tauri/Cargo.toml - Обновленный с всеми зависимостями
-
 [package]
 name = "jarvis"
 version = "0.3.0"
 edition = "2021"
 
+# Определяем библиотеку
+[lib]
+name = "jarvis"
+path = "src/lib.rs"
+
+# Определяем исполняемый файл
+[[bin]]
+name = "jarvis"
+path = "src/main.rs"
+
 [build-dependencies]
 tauri-build = { version = "1.5.6", features = [] }
 
 [dependencies]
-tauri = { version = "1.8.3", features = ["api-all"] }
 
 # Основные зависимости
 serde = { version = "1.0.164", features = ["derive"] }
@@ -22,14 +29,14 @@ hound = "3.5.0"
 rodio = "0.17.1"
 kira = "0.8.5"
 
-# Записывающие устройства  
+# Записывающие устройства
 pv_recorder = "1.1.2"
 portaudio = "0.7.0"
 
 # Wake-word detection
 pv_porcupine = "2.2.1"
 vosk = "0.2.0"
-libappindicator = "0.9.0"
+
 # Строки и последовательности
 seqdiff = "0.3.0"
 rand = "0.8.5"
@@ -53,12 +60,9 @@ urlencoding = "2.1"
 # Время и даты
 chrono = { version = "0.4", features = ["serde"] }
 
-# Системный трей
-tray-icon = "0.21.0"
-image = "0.24"
-winit = "0.30.11"
-gtk-sys = "0.18.2"
-rfd = "0.10.0"
+# Системный трей (БЕЗ GTK!) - ИСПОЛЬЗУЕМ ВСТРОЕННЫЙ TAURI TRAY
+tauri = { version = "1.8.3", features = ["api-all", "system-tray"] }
+signal-hook = "0.3.18"
 
 # Обработка сигналов
 [target.'cfg(unix)'.dependencies]
@@ -73,10 +77,15 @@ anyhow = "1.0"
 
 [features]
 # Основные функции
-default = ["custom-protocol"]
+default = ["custom-protocol", "system-tray", "document-search"]
 
 # Пользовательский протокол для production сборок
 custom-protocol = []
+
+# Основные модули
+system-tray = []
+document-search = []
+ai-integration = []
 
 # Экспериментальные функции
 experimental-local-ai = []

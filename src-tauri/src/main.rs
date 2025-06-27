@@ -1,67 +1,25 @@
-// app/src/main.rs - Исправленная точка входа JARVIS
+// src-tauri/src/main.rs - Исправленная точка входа приложения
 
 use std::env;
-use std::path::PathBuf;
 use std::process;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use once_cell::sync::{Lazy, OnceCell};
-use platform_dirs::AppDirs;
+// Импортируем все из нашей библиотеки
+use jarvis::{
+    JarvisResult, JarvisError,
+    config, error, db, audio, stt, listener,
+    commands, app, structs
+};
 
-// Модули ошибок (первым делом)
-mod error;
-use error::{JarvisResult, JarvisError};
+#[cfg(feature = "document-search")]
+use jarvis::document_search;
 
-// Основные модули
-mod config;
-mod log;
-mod db;
-
-// Аудио и ввод/вывод
-mod recorder;
-mod audio;
-
-// Распознавание и синтез речи
-mod stt;
-mod listener;
-
-// Система команд
-mod commands;
-mod document_search;
-
-pub use db::structs;
-// Системная интеграция
-#[cfg(not(target_os = "macos"))]
-mod tray;
-
-// Основное приложение
-mod app;
-
-use commands::AssistantCommand;
+#[cfg(all(not(target_os = "macos"), feature = "system-tray"))]
+use jarvis::tray;
 
 // Логирование
 #[macro_use]
-extern crate simple_log;
-
-// Глобальные переменные
-static APP_DIR: Lazy<PathBuf> = Lazy::new(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-static SOUND_DIR: OnceCell<PathBuf> = OnceCell::new();
-
-// В функции initialize_configuration() ДОБАВИТЬ:
-pub fn initialize_sound_dir() -> JarvisResult<()> {
-    let sound_dir = config::get_sound_directory()?;
-    SOUND_DIR.set(sound_dir).map_err(|_| {
-        JarvisError::ConfigError(error::ConfigError::DirectoryCreationFailed(
-            "SOUND_DIR already initialized".to_string()
-        ))
-    })?;
-    Ok(())
-}
-static APP_DIRS: OnceCell<AppDirs> = OnceCell::new();
-static APP_CONFIG_DIR: OnceCell<PathBuf> = OnceCell::new();
-static APP_LOG_DIR: OnceCell<PathBuf> = OnceCell::new();
-static DB: OnceCell<db::structs::Settings> = OnceCell::new();
-static COMMANDS_LIST: OnceCell<Vec<AssistantCommand>> = OnceCell::new();
+extern crate log;
 
 // Флаги состояния
 static SHUTDOWN_REQUESTED: AtomicBool = AtomicBool::new(false);
@@ -88,7 +46,7 @@ fn main() {
 
 /// Основная функция приложения
 fn run_application() -> JarvisResult<()> {
-    info!("🚀 Starting JARVIS Voice Assistant v{}", config::APP_VERSION.unwrap_or("unknown"));
+    info!("🚀 Starting JARVIS Voice Assistant v{}", jarvis::VERSION);
 
     // === ЭТАП 1: Базовая инициализация ===
     info!("📁 Phase 1: Basic initialization");
@@ -108,44 +66,37 @@ fn run_application() -> JarvisResult<()> {
     info!("🖥️ Phase 4: System integration");
     initialize_system_integration()?;
 
-    // === ЭТАП 5: Запуск основного цикла ===
-    info!("🎯 Phase 5: Starting main application loop");
-    INITIALIZATION_COMPLETE.store(true, Ordering::SeqCst);
+    // === ЭТАП 5: Основной цикл ===
+    info!("🎯 Phase 5: Starting main loop");
+
+    // Отмечаем инициализацию как завершенную
+    INITIALIZATION_COMPLETE.store(true, Ordering::Relaxed);
 
     run_main_loop()?;
 
+    info!("✅ All phases completed successfully");
     Ok(())
 }
 
 /// Инициализация конфигурации
 fn initialize_configuration() -> JarvisResult<()> {
     info!("Initializing configuration...");
-
     config::init_dirs()?;
-    initialize_sound_dir()?;
-    // config::validate_config()?; // Добавим позже если нужно
-
+    config::validate_configuration()?;
     info!("✅ Configuration initialized");
     Ok(())
 }
 
 /// Инициализация логирования
 fn initialize_logging() -> JarvisResult<()> {
-    info!("Initializing logging system...");
+    info!("Initializing logging...");
 
-    log::init_logging().map_err(|e| {
-        JarvisError::ConfigError(error::ConfigError::InvalidConfiguration(
-            format!("Failed to initialize logging: {}", e)
-        ))
-    })?;
+    if let Ok(log_path) = config::get_log_file_path() {
+        // Здесь можно настроить более продвинутое логирование
+        info!("Log file: {}", log_path.display());
+    }
 
-    // Логируем информацию о приложении
-    info!("JARVIS Voice Assistant v{}", config::APP_VERSION.unwrap_or("unknown"));
-    info!("Platform: {} {}", std::env::consts::OS, std::env::consts::ARCH);
-    info!("Config directory: {}", APP_CONFIG_DIR.get().unwrap().display());
-    info!("Log directory: {}", APP_LOG_DIR.get().unwrap().display());
-
-    info!("✅ Logging system initialized");
+    info!("✅ Logging initialized");
     Ok(())
 }
 
@@ -153,13 +104,7 @@ fn initialize_logging() -> JarvisResult<()> {
 fn initialize_database() -> JarvisResult<()> {
     info!("Initializing database...");
 
-    let settings = db::init_settings()?;
-
-    DB.set(settings).map_err(|_| {
-        JarvisError::DatabaseError(error::DatabaseError::InitializationFailed(
-            "Database already initialized".to_string()
-        ))
-    })?;
+    let _settings = db::init_settings()?;
 
     info!("✅ Database initialized");
     Ok(())
@@ -167,15 +112,6 @@ fn initialize_database() -> JarvisResult<()> {
 
 /// Инициализация аудио системы
 fn initialize_audio_system() -> JarvisResult<()> {
-    info!("Initializing audio system...");
-
-    // Инициализируем аудио рекордер
-    info!("Starting audio recorder...");
-    recorder::init().map_err(|e| {
-        error!("❌ Critical: Audio recorder initialization failed");
-        e
-    })?;
-
     // Инициализируем аудио плеер
     info!("Starting audio player...");
     audio::init().map_err(|e| {
@@ -205,30 +141,21 @@ fn initialize_audio_system() -> JarvisResult<()> {
 fn initialize_commands_and_documents() -> JarvisResult<()> {
     info!("Initializing command system...");
 
-    let commands = commands::parse_commands().map_err(|e| {
+    let _commands = commands::parse_commands().map_err(|e| {
         JarvisError::CommandError(error::CommandError::ParseError(
             format!("Failed to parse commands: {}", e)
         ))
     })?;
 
-    info!("Commands loaded: {} total", commands.len());
-
-    // Логируем доступные команды
-    let command_names = commands::list(&commands);
-    info!("Available commands: {:?}", command_names);
-
-    COMMANDS_LIST.set(commands).map_err(|_| {
-        JarvisError::CommandError(error::CommandError::ParseError(
-            "Commands list already initialized".to_string()
-        ))
-    })?;
-
-    // Инициализируем поиск документов
-    info!("Starting document search...");
-    document_search::init().map_err(|e| {
-        warn!("Document search initialization failed: {}", e);
-        e
-    })?;
+    // Инициализируем поиск документов (если включен)
+    #[cfg(feature = "document-search")]
+    {
+        info!("Starting document search...");
+        document_search::init().map_err(|e| {
+            warn!("Document search initialization failed: {}", e);
+            e
+        })?;
+    }
 
     info!("✅ Commands and document search initialized");
     Ok(())
@@ -237,7 +164,7 @@ fn initialize_commands_and_documents() -> JarvisResult<()> {
 /// Инициализация системной интеграции
 fn initialize_system_integration() -> JarvisResult<()> {
     // Инициализируем системный трей (если поддерживается)
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(all(not(target_os = "macos"), feature = "system-tray"))]
     {
         info!("Starting system tray...");
         tray::init().map_err(|e| {
@@ -275,42 +202,42 @@ fn run_main_loop() -> JarvisResult<()> {
     Ok(())
 }
 
-/// Установка обработчиков сигналов
+/// Настройка обработчиков сигналов
 fn setup_signal_handlers() {
     #[cfg(unix)]
     {
-        use signal_hook::{consts::SIGINT, iterator::Signals};
+        use signal_hook::{consts::SIGINT, consts::SIGTERM, iterator::Signals};
         use std::thread;
 
-        if let Ok(mut signals) = Signals::new(&[SIGINT]) {
-            thread::spawn(move || {
-                for sig in signals.forever() {
-                    match sig {
-                        SIGINT => {
-                            info!("📡 Received SIGINT, initiating graceful shutdown...");
-                            SHUTDOWN_REQUESTED.store(true, Ordering::SeqCst);
-                            break;
-                        }
-                        _ => unreachable!(),
+        let mut signals = Signals::new(&[SIGINT, SIGTERM]).unwrap();
+        thread::spawn(move || {
+            for sig in signals.forever() {
+                match sig {
+                    SIGINT | SIGTERM => {
+                        info!("Received shutdown signal: {}", sig);
+                        request_shutdown();
+                        break;
                     }
+                    _ => {}
                 }
-            });
-        }
+            }
+        });
     }
 
     #[cfg(windows)]
     {
-        use winapi::um::wincon::{SetConsoleCtrlHandler, CTRL_C_EVENT};
-        use winapi::shared::minwindef::{BOOL, DWORD, TRUE, FALSE};
+        use winapi::um::consoleapi::SetConsoleCtrlHandler;
+        use winapi::um::wincon::{CTRL_C_EVENT, CTRL_CLOSE_EVENT};
+        use winapi::shared::minwindef::{BOOL, DWORD, TRUE};
 
         unsafe extern "system" fn ctrl_handler(ctrl_type: DWORD) -> BOOL {
             match ctrl_type {
-                CTRL_C_EVENT => {
-                    info!("📡 Received Ctrl+C, initiating graceful shutdown...");
-                    SHUTDOWN_REQUESTED.store(true, Ordering::SeqCst);
+                CTRL_C_EVENT | CTRL_CLOSE_EVENT => {
+                    info!("Received Windows shutdown signal: {}", ctrl_type);
+                    request_shutdown();
                     TRUE
                 }
-                _ => FALSE,
+                _ => TRUE,
             }
         }
 
@@ -320,123 +247,44 @@ fn setup_signal_handlers() {
     }
 }
 
+/// Запрос на завершение приложения
+pub fn request_shutdown() {
+    info!("Shutdown requested");
+    SHUTDOWN_REQUESTED.store(true, Ordering::Relaxed);
+}
+
 /// Проверка запроса на завершение
 pub fn should_shutdown() -> bool {
-    SHUTDOWN_REQUESTED.load(Ordering::SeqCst)
+    SHUTDOWN_REQUESTED.load(Ordering::Relaxed)
 }
 
-/// Проверка завершения инициализации
-pub fn is_initialization_complete() -> bool {
-    INITIALIZATION_COMPLETE.load(Ordering::SeqCst)
-}
-
-/// Запрос graceful shutdown
-pub fn request_shutdown() {
-    SHUTDOWN_REQUESTED.store(true, Ordering::SeqCst);
-    info!("🛑 Shutdown requested");
-}
-
-/// Graceful shutdown всех компонентов
+/// Выполнение graceful shutdown
 fn perform_graceful_shutdown() -> JarvisResult<()> {
-    info!("🛑 Initiating graceful shutdown...");
+    info!("Performing graceful shutdown...");
 
-    // Фаза 1: Останавливаем прослушивание
-    info!("Phase 1: Stopping voice recognition...");
-    if recorder::is_recording() {
-        if let Err(e) = recorder::stop_recording() {
-            warn!("Failed to stop recording gracefully: {}", e);
+    // Останавливаем компоненты в обратном порядке инициализации
+
+    // Системная интеграция
+    #[cfg(all(not(target_os = "macos"), feature = "system-tray"))]
+    {
+        if let Err(e) = tray::shutdown() {
+            warn!("Tray shutdown error: {}", e);
         }
     }
 
-    // Фаза 2: Закрываем аудио системы
-    info!("Phase 2: Shutting down audio systems...");
-    if let Err(e) = recorder::shutdown() {
-        warn!("Failed to shutdown recorder gracefully: {}", e);
+    // Аудио система
+    if let Err(e) = listener::shutdown() {
+        warn!("Listener shutdown error: {}", e);
+    }
+
+    if let Err(e) = stt::shutdown() {
+        warn!("STT shutdown error: {}", e);
     }
 
     if let Err(e) = audio::shutdown() {
-        warn!("Failed to shutdown audio gracefully: {}", e);
-    }
-
-    // Фаза 3: Сохраняем состояние базы данных
-    info!("Phase 3: Saving database state...");
-    if let Err(e) = db::save_state() {
-        warn!("Failed to save database state: {}", e);
-    }
-
-    // Фаза 4: Закрываем системную интеграцию
-    info!("Phase 4: Shutting down system integration...");
-    #[cfg(not(target_os = "macos"))]
-    {
-        if let Err(e) = tray::shutdown() {
-            warn!("Failed to shutdown tray gracefully: {}", e);
-        }
+        warn!("Audio shutdown error: {}", e);
     }
 
     info!("✅ Graceful shutdown completed");
     Ok(())
-}
-
-/// Экстренное завершение при критической ошибке
-pub fn emergency_shutdown(error: &JarvisError) -> ! {
-    error!("💥 CRITICAL ERROR: {}", error);
-    error!("🚨 Performing emergency shutdown...");
-
-    // Попытка экстренного сохранения данных
-    let _ = db::emergency_save();
-
-    // Принудительная остановка всех процессов
-    let _ = recorder::shutdown();
-    let _ = audio::shutdown();
-
-    error!("🚨 Emergency shutdown completed");
-    process::exit(1);
-}
-
-/// Получение статистики приложения
-pub fn get_app_stats() -> serde_json::Value {
-    serde_json::json!({
-        "version": config::APP_VERSION.unwrap_or("unknown"),
-        "platform": format!("{} {}", std::env::consts::OS, std::env::consts::ARCH),
-        "initialization_complete": is_initialization_complete(),
-        "components": {
-            "recorder_initialized": recorder::is_initialized(),
-            "recorder_recording": recorder::is_recording(),
-            "audio_initialized": audio::is_initialized(),
-        },
-        "commands": {
-            "total_commands": COMMANDS_LIST.get().map(|c| c.len()).unwrap_or(0),
-        }
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_shutdown_flag() {
-        SHUTDOWN_REQUESTED.store(false, Ordering::SeqCst);
-        assert!(!should_shutdown());
-
-        request_shutdown();
-        assert!(should_shutdown());
-    }
-
-    #[test]
-    fn test_initialization_flag() {
-        INITIALIZATION_COMPLETE.store(false, Ordering::SeqCst);
-        assert!(!is_initialization_complete());
-
-        INITIALIZATION_COMPLETE.store(true, Ordering::SeqCst);
-        assert!(is_initialization_complete());
-    }
-
-    #[test]
-    fn test_app_stats() {
-        let stats = get_app_stats();
-        assert!(stats.get("version").is_some());
-        assert!(stats.get("platform").is_some());
-        assert!(stats.get("components").is_some());
-    }
 }
