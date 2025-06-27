@@ -6,4 +6,3 @@ pub mod db;
 pub use structs::*;
 pub use db::*;
 // Re-export main database functions from parent module
-pub use crate::db::*;

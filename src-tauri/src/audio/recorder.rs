@@ -1,6 +1,6 @@
 // app/src/recorder.rs - Рефакторинг с улучшенной обработкой ошибок
 
-pub mod pvrecorder;
+use super::pvrecorder;
 // mod cpal;     // TODO: Implement later
 // mod portaudio; // TODO: Implement later
 

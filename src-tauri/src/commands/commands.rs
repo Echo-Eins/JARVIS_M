@@ -9,9 +9,9 @@ use std::path::PathBuf;
 use std::process::{Command, Child};
 // use tauri::Manager;
 
-mod structs;
+use super::structs;
 pub use structs::*;
-
+use log::{info, warn, error};
 use crate::{config, audio};
 
 // @TODO. Allow commands both in yaml and json format.

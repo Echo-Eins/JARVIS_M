@@ -1,6 +1,6 @@
 // app/src/db.rs - Исправленный модуль базы данных с недостающими функциями
 
-pub mod structs;
+use super::structs;
 use crate::{config, APP_CONFIG_DIR};
 use crate::error::{JarvisResult, JarvisError, DatabaseError};
 

@@ -1,12 +1,11 @@
 // app/src/config.rs - Рефакторинг с улучшенной обработкой ошибок
 
-pub mod structs;
-use structs::{WakeWordEngine, SpeechToTextEngine, RecorderType, AudioType};
+use super::structs::{WakeWordEngine, SpeechToTextEngine, RecorderType, AudioType};
+use log::{info, warn, error};
 use tauri::api::path::resource_dir;
 use std::path::PathBuf;
 use std::fs;
 use std::env;
-use std::path::PathBuf;
 use once_cell::sync::Lazy;
 
 use platform_dirs::AppDirs;

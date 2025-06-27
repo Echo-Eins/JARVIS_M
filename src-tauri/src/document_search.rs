@@ -41,7 +41,7 @@ pub struct FoundDocument {
 }
 
 /// Типы документов
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DocumentType {
     Document,
     Image,

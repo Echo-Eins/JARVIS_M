@@ -10,7 +10,6 @@ pub mod commands;
 pub use structs::*;
 
 // Re-export main command functions from parent module
-pub use crate::commands::*;
 
 use crate::error::JarvisResult;
 use log::info;

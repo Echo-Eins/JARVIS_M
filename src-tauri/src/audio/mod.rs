@@ -1,6 +1,6 @@
 // src-tauri/src/audio/mod.rs
 
-pub mod monitor;
+pub mod audio_monitor;
 pub mod recorder;
 
 // Re-export main functions
@@ -11,14 +11,14 @@ use crate::error::JarvisResult;
 use log::info;
 
 pub fn init() -> JarvisResult<()> {
-    monitor::init()?;
+    audio_monitor::init()?;
     recorder::init()?;
     info!("Audio system initialized");
     Ok(())
 }
 
 pub fn shutdown() -> JarvisResult<()> {
-    monitor::shutdown()?;
+    audio_monitor::shutdown()?;
     recorder::shutdown()?;
     info!("Audio system shutdown completed");
     Ok(())
