@@ -1,5 +1,10 @@
 // src-tauri/src/lib.rs - Правильная точка входа библиотеки
 
+use once_cell::sync::OnceCell;
+use platform_dirs::AppDirs;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
 // Основные модули (обязательные)
 pub mod error;
 pub mod config;
@@ -37,6 +42,13 @@ pub use db::structs;
 // Публичные функции инициализации
 pub use config::config::{init_dirs, validate_configuration};
 pub use db::db::init_settings;
+
+pub static APP_DIRS: OnceCell<AppDirs> = OnceCell::new();
+pub static APP_CONFIG_DIR: OnceCell<PathBuf> = OnceCell::new();
+pub static APP_LOG_DIR: OnceCell<PathBuf> = OnceCell::new();
+pub static COMMANDS: OnceCell<Vec<AssistantCommand>> = OnceCell::new();
+pub static COMMANDS_LIST: OnceCell<Vec<AssistantCommand>> = OnceCell::new();
+pub static DB: OnceCell<Arc<Mutex<db::db::LegacyDatabase>>> = OnceCell::new();
 
 // Версия библиотеки
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -3,12 +3,14 @@
 use std::env;
 use std::process;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 // Импортируем все из нашей библиотеки
 use jarvis::{
     JarvisResult, JarvisError,
     config, error, db, audio, stt, listener,
-    commands, app, structs
+    commands, app, structs,
+    COMMANDS, COMMANDS_LIST, DB
 };
 
 #[cfg(feature = "document-search")]
@@ -104,7 +106,16 @@ fn initialize_logging() -> JarvisResult<()> {
 fn initialize_database() -> JarvisResult<()> {
     info!("Initializing database...");
 
-    let _settings = db::init_settings()?;
+    let settings = db::init_settings()?;
+
+    let legacy_db = db::LegacyDatabase::from_settings(&settings);
+    if DB.set(Arc::new(Mutex::new(legacy_db))).is_err() {
+        if let Some(existing) = DB.get() {
+            if let Ok(mut guard) = existing.lock() {
+                guard.sync_from_global_settings();
+            }
+        }
+    }
 
     info!("✅ Database initialized");
     Ok(())
@@ -141,11 +152,14 @@ fn initialize_audio_system() -> JarvisResult<()> {
 fn initialize_commands_and_documents() -> JarvisResult<()> {
     info!("Initializing command system...");
 
-    let _commands = commands::parse_commands().map_err(|e| {
+    let commands_data = commands::parse_commands().map_err(|e| {
         JarvisError::CommandError(error::CommandError::ParseError(
             format!("Failed to parse commands: {}", e)
         ))
     })?;
+
+    let _ = COMMANDS.set(commands_data.clone());
+    let _ = COMMANDS_LIST.set(commands_data.clone());
 
     // Инициализируем поиск документов (если включен)
     #[cfg(feature = "document-search")]

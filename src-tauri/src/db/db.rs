@@ -4,6 +4,7 @@ use super::structs;
 use crate::{config, APP_CONFIG_DIR};
 use crate::error::{JarvisResult, JarvisError, DatabaseError};
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, BufWriter, Write};
@@ -12,6 +13,171 @@ use std::sync::{Arc, Mutex};
 use once_cell::sync::OnceCell;
 
 use serde_json;
+
+#[derive(Default, Debug, Clone)]
+pub struct LegacyDatabase {
+    data: HashMap<String, String>,
+}
+
+impl LegacyDatabase {
+    pub fn new() -> Self {
+        Self { data: HashMap::new() }
+    }
+
+    pub fn from_settings(settings: &structs::Settings) -> Self {
+        let mut db = Self::new();
+        db.refresh_from_settings(settings);
+        db
+    }
+
+    fn refresh_from_settings(&mut self, settings: &structs::Settings) {
+        self.data.clear();
+        self.data.insert("assistant_voice".to_string(), settings.voice.clone());
+        self.data.insert("selected_microphone".to_string(), settings.microphone.to_string());
+        self.data.insert("selected_speaker".to_string(), settings.speaker.to_string());
+        self.data.insert(
+            "selected_wake_word_engine".to_string(),
+            format!("{:?}", settings.wake_word_engine),
+        );
+        self.data.insert(
+            "speech_to_text_engine".to_string(),
+            format!("{:?}", settings.speech_to_text_engine),
+        );
+        self.data.insert("api_key_picovoice".to_string(), settings.api_keys.picovoice.clone());
+        self.data.insert("api_key__picovoice".to_string(), settings.api_keys.picovoice.clone());
+        self.data.insert("api_key_openai".to_string(), settings.api_keys.openai.clone());
+        self.data.insert("api_key_openrouter".to_string(), settings.api_keys.openrouter.clone());
+        self.data.insert("ai_model".to_string(), settings.ai_config.preferred_model.clone());
+        self.data.insert("ai_temperature".to_string(), settings.ai_config.temperature.to_string());
+        self.data.insert("ai_max_tokens".to_string(), settings.ai_config.max_tokens.to_string());
+        self.data.insert(
+            "enable_conversation_mode".to_string(),
+            settings.ai_config.enable_conversation_mode.to_string(),
+        );
+        self.data.insert(
+            "enable_document_search".to_string(),
+            settings.advanced_settings.enable_document_search.to_string(),
+        );
+        self.data.insert(
+            "auto_open_documents".to_string(),
+            settings.advanced_settings.auto_open_documents.to_string(),
+        );
+        self.data.insert(
+            "device_monitoring".to_string(),
+            settings.advanced_settings.device_monitoring.to_string(),
+        );
+        self.data.insert(
+            "tts_engine".to_string(),
+            format!("{:?}", settings.tts_config.engine),
+        );
+        self.data.insert("tts_voice".to_string(), settings.tts_config.voice_id.clone());
+        self.data.insert("tts_speed".to_string(), settings.tts_config.speed.to_string());
+        self.data.insert("tts_volume".to_string(), settings.tts_config.volume.to_string());
+    }
+
+    pub fn get(&self, key: &str) -> Option<String> {
+        self.data.get(key).cloned()
+    }
+
+    pub fn set(&mut self, key: &str, value: &str) -> Result<(), String> {
+        let value_string = value.to_string();
+        let update_value = value_string.clone();
+
+        if let Err(err) = update_settings(|settings| {
+            match key {
+                "assistant_voice" => settings.voice = update_value.clone(),
+                "selected_microphone" => {
+                    if let Ok(parsed) = update_value.parse::<i32>() {
+                        settings.microphone = parsed;
+                    }
+                }
+                "selected_speaker" => {
+                    if let Ok(parsed) = update_value.parse::<i32>() {
+                        settings.speaker = parsed;
+                    }
+                }
+                "selected_wake_word_engine" => {
+                    let normalized = update_value.to_lowercase();
+                    settings.wake_word_engine = match normalized.as_str() {
+                        "rustpotter" => config::structs::WakeWordEngine::Rustpotter,
+                        "vosk" => config::structs::WakeWordEngine::Vosk,
+                        "porcupine" | "picovoice" => config::structs::WakeWordEngine::Porcupine,
+                        _ => settings.wake_word_engine,
+                    };
+                }
+                "api_key_picovoice" | "api_key__picovoice" => {
+                    settings.api_keys.picovoice = update_value.clone();
+                }
+                "api_key_openai" => settings.api_keys.openai = update_value.clone(),
+                "api_key_openrouter" => settings.api_keys.openrouter = update_value.clone(),
+                "ai_model" => settings.ai_config.preferred_model = update_value.clone(),
+                "ai_temperature" => {
+                    if let Ok(parsed) = update_value.parse::<f32>() {
+                        settings.ai_config.temperature = parsed;
+                    }
+                }
+                "ai_max_tokens" => {
+                    if let Ok(parsed) = update_value.parse::<u32>() {
+                        settings.ai_config.max_tokens = parsed;
+                    }
+                }
+                "enable_conversation_mode" => {
+                    if let Ok(parsed) = update_value.parse::<bool>() {
+                        settings.ai_config.enable_conversation_mode = parsed;
+                    }
+                }
+                "enable_document_search" => {
+                    if let Ok(parsed) = update_value.parse::<bool>() {
+                        settings.advanced_settings.enable_document_search = parsed;
+                    }
+                }
+                "auto_open_documents" => {
+                    if let Ok(parsed) = update_value.parse::<bool>() {
+                        settings.advanced_settings.auto_open_documents = parsed;
+                    }
+                }
+                "device_monitoring" => {
+                    if let Ok(parsed) = update_value.parse::<bool>() {
+                        settings.advanced_settings.device_monitoring = parsed;
+                    }
+                }
+                "tts_engine" => {
+                    let normalized = update_value.to_lowercase();
+                    settings.tts_config.engine = match normalized.as_str() {
+                        "system" => structs::TtsEngine::System,
+                        "openai" => structs::TtsEngine::OpenAI,
+                        "elevenlabs" => structs::TtsEngine::ElevenLabs,
+                        "local" => structs::TtsEngine::Local,
+                        _ => settings.tts_config.engine.clone(),
+                    };
+                }
+                "tts_voice" => settings.tts_config.voice_id = update_value.clone(),
+                "tts_speed" => {
+                    if let Ok(parsed) = update_value.parse::<f32>() {
+                        settings.tts_config.speed = parsed;
+                    }
+                }
+                "tts_volume" => {
+                    if let Ok(parsed) = update_value.parse::<f32>() {
+                        settings.tts_config.volume = parsed;
+                    }
+                }
+                _ => {}
+            }
+        }) {
+            return Err(err.to_string());
+        }
+
+        self.data.insert(key.to_string(), value_string);
+        Ok(())
+    }
+
+    pub fn sync_from_global_settings(&mut self) {
+        if let Some(current) = get_current_settings() {
+            self.refresh_from_settings(&current);
+        }
+    }
+}
 
 // Глобальная ссылка на текущие настройки для быстрого доступа
 static CURRENT_SETTINGS: OnceCell<Arc<Mutex<structs::Settings>>> = OnceCell::new();
@@ -39,6 +205,10 @@ fn get_backup_db_file_path() -> JarvisResult<PathBuf> {
 
 /// Инициализация настроек с улучшенной обработкой ошибок
 pub fn init_settings() -> JarvisResult<structs::Settings> {
+    if let Some(settings) = get_current_settings() {
+        return Ok(settings);
+    }
+
     let db_file_path = get_db_file_path()?;
 
     info!("Loading settings database from: {}", db_file_path.display());
@@ -53,11 +223,18 @@ pub fn init_settings() -> JarvisResult<structs::Settings> {
     };
 
     // Сохраняем настройки в глобальной переменной для быстрого доступа
-    CURRENT_SETTINGS.set(Arc::new(Mutex::new(settings.clone())))
-        .map_err(|_| JarvisError::DatabaseError(DatabaseError::InitializationFailed(
-            "Settings already initialized".to_string()
-        )))?;
+    if CURRENT_SETTINGS
+        .set(Arc::new(Mutex::new(settings.clone())))
+        .is_err()
+    {
+        if let Some(existing) = get_current_settings() {
+            return Ok(existing);
+        }
 
+        return Err(JarvisError::DatabaseError(DatabaseError::InitializationFailed(
+            "Settings already initialized".to_string()
+        )));
+    }
     info!("Settings loaded successfully");
     Ok(settings)
 }
@@ -275,19 +452,21 @@ where
     F: FnOnce(&mut structs::Settings),
 {
     if let Some(global_settings) = CURRENT_SETTINGS.get() {
-        if let Ok(mut settings) = global_settings.lock() {
+        let updated_settings = {
+            let mut settings = global_settings.lock().map_err(|_| {
+                JarvisError::DatabaseError(DatabaseError::WriteError(
+                    "Failed to lock settings for update".to_string()
+                ))
+            })?;
+
             updater(&mut *settings);
+            settings.clone()
+        };
 
-            // Сохраняем обновленные настройки
-            save_settings(&*settings)?;
+        save_settings(&updated_settings)?;
 
-            info!("Settings updated successfully");
-            Ok(())
-        } else {
-            Err(JarvisError::DatabaseError(DatabaseError::WriteError(
-                "Failed to lock settings for update".to_string()
-            )))
-        }
+        info!("Settings updated successfully");
+        Ok(())
     } else {
         Err(JarvisError::DatabaseError(DatabaseError::InitializationFailed(
             "Settings not initialized".to_string()

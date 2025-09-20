@@ -8,7 +8,8 @@ use once_cell::sync::OnceCell;
 
 use crate::error::{JarvisResult, JarvisError, AudioError};
 use crate::config;
-use crate::{DB, APP_CONFIG_DIR};
+use crate::APP_CONFIG_DIR;
+use crate::db::db;
 
 // Поддерживаемые TTS движки
 #[derive(Debug, Clone)]
@@ -98,8 +99,8 @@ pub fn init() -> JarvisResult<()> {
 /// Определение лучшего доступного TTS движка
 fn detect_best_engine() -> JarvisResult<TtsEngine> {
     // Проверяем OpenAI API ключ
-    if let Some(db) = DB.get() {
-        if !db.api_keys.openai.trim().is_empty() {
+    if let Some(settings) = db::get_current_settings() {
+        if !settings.api_keys.openai.trim().is_empty() {
             info!("OpenAI API key found, testing OpenAI TTS...");
             if test_openai_tts().is_ok() {
                 return Ok(TtsEngine::OpenAI);
@@ -173,12 +174,13 @@ fn test_system_tts() -> JarvisResult<()> {
 /// Тест OpenAI TTS
 fn test_openai_tts() -> JarvisResult<()> {
     // Получаем API ключ
-    let api_key = DB.get()
-        .and_then(|db| {
-            if db.api_keys.openai.trim().is_empty() {
+    let api_key = db::get_current_settings()
+        .and_then(|settings| {
+            let key = settings.api_keys.openai.trim();
+            if key.is_empty() {
                 None
             } else {
-                Some(db.api_keys.openai.clone())
+                Some(key.to_string())
             }
         })
         .ok_or_else(|| JarvisError::AudioError(AudioError::InitializationFailed(
@@ -199,16 +201,15 @@ fn test_openai_tts() -> JarvisResult<()> {
 fn load_voice_settings() -> JarvisResult<VoiceSettings> {
     let mut settings = VoiceSettings::default();
 
-    if let Some(db) = DB.get() {
-        // Загружаем voice из настроек
-        if !db.voice.is_empty() {
-            settings.voice_id = db.voice.clone();
+    if let Some(stored) = db::get_current_settings() {
+        if !stored.voice.is_empty() {
+            settings.voice_id = stored.voice.clone();
         }
 
         // Здесь можно добавить загрузку других настроек из БД
-        // settings.speed = db.tts_speed.unwrap_or(1.0);
-        // settings.pitch = db.tts_pitch.unwrap_or(1.0);
-        // settings.volume = db.tts_volume.unwrap_or(0.8);
+        settings.speed = stored.tts_config.speed;
+        settings.volume = stored.tts_config.volume;
+        settings.language = stored.tts_config.language;
     }
 
     Ok(settings)
@@ -417,12 +418,13 @@ fn speak_system(text: &str, settings: &VoiceSettings) -> JarvisResult<()> {
 
 /// OpenAI TTS
 fn speak_openai(text: &str, settings: &VoiceSettings) -> JarvisResult<()> {
-    let api_key = DB.get()
-        .and_then(|db| {
-            if db.api_keys.openai.trim().is_empty() {
+    let api_key = db::get_current_settings()
+        .and_then(|settings_data| {
+            let key = settings_data.api_keys.openai.trim();
+            if key.is_empty() {
                 None
             } else {
-                Some(db.api_keys.openai.clone())
+                Some(key.to_string())
             }
         })
         .ok_or_else(|| JarvisError::AudioError(AudioError::PlaybackFailed(

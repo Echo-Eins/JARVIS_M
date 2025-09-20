@@ -69,9 +69,10 @@ fn force_stop_recording() -> Result<(), String> {
 
 /// Определение движка распознавания wake-word из настроек
 fn get_wake_word_engine() -> Result<config::WakeWordEngine, String> {
-    let db = DB.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    let db_arc = DB.get().ok_or_else(|| "Database not initialized".to_string())?;
+    let db = db_arc.lock().map_err(|e| format!("Database lock error: {}", e))?;
 
-    if let Some(engine_str) = db.get::<String>("selected_wake_word_engine") {
+    if let Some(engine_str) = db.get("selected_wake_word_engine") {
         match engine_str.trim().to_lowercase().as_str() {
             "rustpotter" => Ok(config::WakeWordEngine::Rustpotter),
             "vosk" => Ok(config::WakeWordEngine::Vosk),
@@ -206,9 +207,10 @@ fn vosk_init() -> Result<bool, String> {
 fn picovoice_init() -> Result<bool, String> {
     // Получаем API ключ из базы данных
     let api_key = {
-        let db = DB.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let db_arc = DB.get().ok_or_else(|| "Database not initialized".to_string())?;
+        let db = db_arc.lock().map_err(|e| format!("Database lock error: {}", e))?;
 
-        db.get::<String>("api_key__picovoice")
+        db.get("api_key__picovoice")
             .ok_or_else(|| "Picovoice API key not set in settings".to_string())?
     };
 

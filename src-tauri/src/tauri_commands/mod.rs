@@ -10,9 +10,10 @@ use crate::{DB, tts, ai_integration, audio_monitor, recorder};
 // Команды базы данных
 #[tauri::command]
 pub async fn db_read(key: String) -> Result<Value, String> {
-    let db = DB.lock().map_err(|e| format!("Database error: {}", e))?;
+    let db_arc = DB.get().ok_or_else(|| "Database not initialized".to_string())?;
+    let db = db_arc.lock().map_err(|e| format!("Database error: {}", e))?;
 
-    match db.get::<String>(&key) {
+    match db.get(&key) {
         Some(value) => {
             // Пытаемся парсить как JSON, если не получается - возвращаем как строку
             match serde_json::from_str::<Value>(&value) {
@@ -26,7 +27,8 @@ pub async fn db_read(key: String) -> Result<Value, String> {
 
 #[tauri::command]
 pub async fn db_write(key: String, val: Value) -> Result<bool, String> {
-    let mut db = DB.lock().map_err(|e| format!("Database error: {}", e))?;
+    let db_arc = DB.get().ok_or_else(|| "Database not initialized".to_string())?;
+    let mut db = db_arc.lock().map_err(|e| format!("Database error: {}", e))?;
 
     let value_str = match val {
         Value::String(s) => s,
@@ -333,13 +335,21 @@ pub async fn run_diagnostics() -> Result<Value, String> {
     diagnostics.insert("wake_word_engines".to_string(), json!(wake_word_status));
 
     // Проверка API ключей (без раскрытия)
-    if let Ok(Some(db)) = DB.lock().map(|db| Some(db)) {
-        diagnostics.insert("picovoice_key_set".to_string(),
-                           json!(!db.get::<String>("api_key_picovoice").unwrap_or_default().is_empty()));
-        diagnostics.insert("openai_key_set".to_string(),
-                           json!(!db.get::<String>("api_key_openai").unwrap_or_default().is_empty()));
-        diagnostics.insert("openrouter_key_set".to_string(),
-                           json!(!db.get::<String>("api_key_openrouter").unwrap_or_default().is_empty()));
+    if let Some(db_arc) = DB.get() {
+        if let Ok(db) = db_arc.lock() {
+            diagnostics.insert(
+                "picovoice_key_set".to_string(),
+                json!(!db.get("api_key_picovoice").unwrap_or_default().is_empty()),
+            );
+            diagnostics.insert(
+                "openai_key_set".to_string(),
+                json!(!db.get("api_key_openai").unwrap_or_default().is_empty()),
+            );
+            diagnostics.insert(
+                "openrouter_key_set".to_string(),
+                json!(!db.get("api_key_openrouter").unwrap_or_default().is_empty()),
+            );
+        }
     }
 
     // Общий статус
@@ -401,28 +411,29 @@ async fn check_common_issues() -> Vec<String> {
 // Команда экспорта настроек
 #[tauri::command]
 pub async fn export_settings() -> Result<String, String> {
-    let db = DB.lock().map_err(|e| format!("Database error: {}", e))?;
+    let db_arc = DB.get().ok_or_else(|| "Database not initialized".to_string())?;
+    let db = db_arc.lock().map_err(|e| format!("Database error: {}", e))?;
 
     let settings = serde_json::json!({
         "version": env!("CARGO_PKG_VERSION"),
         "export_date": chrono::Utc::now().to_rfc3339(),
         "settings": {
             // Экспортируем все настройки кроме API ключей
-            "assistant_voice": db.get::<String>("assistant_voice"),
-            "selected_microphone": db.get::<String>("selected_microphone"),
-            "selected_speaker": db.get::<String>("selected_speaker"),
-            "selected_wake_word_engine": db.get::<String>("selected_wake_word_engine"),
-            "ai_model": db.get::<String>("ai_model"),
-            "ai_temperature": db.get::<String>("ai_temperature"),
-            "ai_max_tokens": db.get::<String>("ai_max_tokens"),
-            "tts_engine": db.get::<String>("tts_engine"),
-            "tts_voice": db.get::<String>("tts_voice"),
-            "tts_speed": db.get::<String>("tts_speed"),
-            "tts_volume": db.get::<String>("tts_volume"),
-            "enable_conversation_mode": db.get::<String>("enable_conversation_mode"),
-            "enable_document_search": db.get::<String>("enable_document_search"),
-            "auto_open_documents": db.get::<String>("auto_open_documents"),
-            "device_monitoring": db.get::<String>("device_monitoring")
+            "assistant_voice": db.get("assistant_voice"),
+            "selected_microphone": db.get("selected_microphone"),
+            "selected_speaker": db.get("selected_speaker"),
+            "selected_wake_word_engine": db.get("selected_wake_word_engine"),
+            "ai_model": db.get("ai_model"),
+            "ai_temperature": db.get("ai_temperature"),
+            "ai_max_tokens": db.get("ai_max_tokens"),
+            "tts_engine": db.get("tts_engine"),
+            "tts_voice": db.get("tts_voice"),
+            "tts_speed": db.get("tts_speed"),
+            "tts_volume": db.get("tts_volume"),
+            "enable_conversation_mode": db.get("enable_conversation_mode"),
+            "enable_document_search": db.get("enable_document_search"),
+            "auto_open_documents": db.get("auto_open_documents"),
+            "device_monitoring": db.get("device_monitoring")
         }
     });
 
@@ -440,7 +451,8 @@ pub async fn import_settings(settings_json: String) -> Result<bool, String> {
         .and_then(|s| s.as_object())
         .ok_or("Invalid settings structure")?;
 
-    let mut db = DB.lock().map_err(|e| format!("Database error: {}", e))?;
+    let db_arc = DB.get().ok_or_else(|| "Database not initialized".to_string())?;
+    let mut db = db_arc.lock().map_err(|e| format!("Database error: {}", e))?;
 
     // Импортируем настройки
     for (key, value) in settings_obj {
