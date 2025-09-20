@@ -127,15 +127,9 @@ impl AiManager {
     fn load_config() -> JarvisResult<AiConfig> {
         let mut config = AiConfig::default();
 
-        if let Some(db) = db.get() {
-            // Загружаем API ключи
-            config.openai_api_key = db.api_keys.openai.clone();
-
-            // Загружаем ключ OpenRouter (если добавлен в БД)
-            // config.openrouter_api_key = db.api_keys.openrouter.clone();
-
-            // Для демонстрации используем настройки по умолчанию
-            // В реальном проекте эти настройки должны быть в БД
+        if let Ok(api_keys) = db::with_settings(|settings| settings.api_keys.clone()) {
+            config.openai_api_key = api_keys.openai;
+            config.openrouter_api_key = api_keys.openrouter;
         }
 
         // Проверяем наличие хотя бы одного API ключа

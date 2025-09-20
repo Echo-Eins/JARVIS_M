@@ -217,12 +217,11 @@ pub fn stop_recording() -> JarvisResult<()> {
 
 /// Получение индекса выбранного микрофона с проверкой
 pub fn get_selected_microphone_index() -> JarvisResult<i32> {
-    let db = db.get()
-        .ok_or_else(|| JarvisError::RecorderError(RecorderError::InitializationFailed(
-            "Database not initialized".to_string()
-        )))?;
-
-    Ok(db.microphone)
+    db::with_settings(|settings| settings.microphone).map_err(|err| {
+        JarvisError::RecorderError(RecorderError::InitializationFailed(
+            err.to_string(),
+        ))
+    })
 }
 
 /// Получение длины кадра с проверкой

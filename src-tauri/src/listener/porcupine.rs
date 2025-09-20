@@ -11,10 +11,15 @@ use log::{info, warn, error};
 static PORCUPINE: OnceCell<Porcupine> = OnceCell::new();
 
 pub fn init() -> Result<(), ()> {
-    let picovoice_api_key: String;
 
     // retrieve picovoice api key
-    picovoice_api_key = db.get().unwrap().api_keys.picovoice.clone();
+    let picovoice_api_key = match db::with_settings(|settings| settings.api_keys.picovoice.clone()) {
+        Ok(key) => key,
+        Err(err) => {
+            error!("Failed to access settings for Picovoice API key: {}", err);
+            return Err(());
+        }
+    };
     if picovoice_api_key.trim().is_empty() {
         warn!("Picovoice API key is not set.");
         return Err(())

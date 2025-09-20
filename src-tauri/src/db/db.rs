@@ -12,7 +12,7 @@ use log::{info, warn, error};
 use std::sync::{Arc, Mutex};
 use once_cell::sync::OnceCell;
 
-use serde_json;
+use serde_json::{self, Value};
 
 #[derive(Default, Debug, Clone)]
 pub struct LegacyDatabase {
@@ -81,90 +81,9 @@ impl LegacyDatabase {
 
     pub fn set(&mut self, key: &str, value: &str) -> Result<(), String> {
         let value_string = value.to_string();
-        let update_value = value_string.clone();
+        let json_value = Value::String(value_string.clone());
 
-        if let Err(err) = update_settings(|settings| {
-            match key {
-                "assistant_voice" => settings.voice = update_value.clone(),
-                "selected_microphone" => {
-                    if let Ok(parsed) = update_value.parse::<i32>() {
-                        settings.microphone = parsed;
-                    }
-                }
-                "selected_speaker" => {
-                    if let Ok(parsed) = update_value.parse::<i32>() {
-                        settings.speaker = parsed;
-                    }
-                }
-                "selected_wake_word_engine" => {
-                    let normalized = update_value.to_lowercase();
-                    settings.wake_word_engine = match normalized.as_str() {
-                        "rustpotter" => config::structs::WakeWordEngine::Rustpotter,
-                        "vosk" => config::structs::WakeWordEngine::Vosk,
-                        "porcupine" | "picovoice" => config::structs::WakeWordEngine::Porcupine,
-                        _ => settings.wake_word_engine,
-                    };
-                }
-                "api_key_picovoice" | "api_key__picovoice" => {
-                    settings.api_keys.picovoice = update_value.clone();
-                }
-                "api_key_openai" => settings.api_keys.openai = update_value.clone(),
-                "api_key_openrouter" => settings.api_keys.openrouter = update_value.clone(),
-                "ai_model" => settings.ai_config.preferred_model = update_value.clone(),
-                "ai_temperature" => {
-                    if let Ok(parsed) = update_value.parse::<f32>() {
-                        settings.ai_config.temperature = parsed;
-                    }
-                }
-                "ai_max_tokens" => {
-                    if let Ok(parsed) = update_value.parse::<u32>() {
-                        settings.ai_config.max_tokens = parsed;
-                    }
-                }
-                "enable_conversation_mode" => {
-                    if let Ok(parsed) = update_value.parse::<bool>() {
-                        settings.ai_config.enable_conversation_mode = parsed;
-                    }
-                }
-                "enable_document_search" => {
-                    if let Ok(parsed) = update_value.parse::<bool>() {
-                        settings.advanced_settings.enable_document_search = parsed;
-                    }
-                }
-                "auto_open_documents" => {
-                    if let Ok(parsed) = update_value.parse::<bool>() {
-                        settings.advanced_settings.auto_open_documents = parsed;
-                    }
-                }
-                "device_monitoring" => {
-                    if let Ok(parsed) = update_value.parse::<bool>() {
-                        settings.advanced_settings.device_monitoring = parsed;
-                    }
-                }
-                "tts_engine" => {
-                    let normalized = update_value.to_lowercase();
-                    settings.tts_config.engine = match normalized.as_str() {
-                        "system" => structs::TtsEngine::System,
-                        "openai" => structs::TtsEngine::OpenAI,
-                        "elevenlabs" => structs::TtsEngine::ElevenLabs,
-                        "local" => structs::TtsEngine::Local,
-                        _ => settings.tts_config.engine.clone(),
-                    };
-                }
-                "tts_voice" => settings.tts_config.voice_id = update_value.clone(),
-                "tts_speed" => {
-                    if let Ok(parsed) = update_value.parse::<f32>() {
-                        settings.tts_config.speed = parsed;
-                    }
-                }
-                "tts_volume" => {
-                    if let Ok(parsed) = update_value.parse::<f32>() {
-                        settings.tts_config.volume = parsed;
-                    }
-                }
-                _ => {}
-            }
-        }) {
+        if let Err(err) = set_setting_value(key, json_value) {
             return Err(err.to_string());
         }
 
@@ -176,6 +95,311 @@ impl LegacyDatabase {
         if let Some(current) = get_current_settings() {
             self.refresh_from_settings(&current);
         }
+    }
+}
+
+/// Safely execute a read operation against the in-memory settings snapshot.
+pub fn with_settings<F, R>(reader: F) -> JarvisResult<R>
+where
+    F: FnOnce(&structs::Settings) -> R,
+{
+    let settings_arc = CURRENT_SETTINGS.get().ok_or_else(|| {
+        JarvisError::DatabaseError(DatabaseError::InitializationFailed(
+            "Settings not initialized".to_string(),
+        ))
+    })?;
+
+    let settings = settings_arc.lock().map_err(|_| {
+        JarvisError::DatabaseError(DatabaseError::ReadError(
+            "Failed to lock settings for read".to_string(),
+        ))
+    })?;
+
+    Ok(reader(&*settings))
+}
+
+/// Safely execute a write operation against the in-memory settings snapshot
+/// and persist the updated values to disk.
+pub fn with_settings_mut<F, R>(writer: F) -> JarvisResult<R>
+where
+    F: FnOnce(&mut structs::Settings) -> JarvisResult<R>,
+{
+    let settings_arc = CURRENT_SETTINGS.get().ok_or_else(|| {
+        JarvisError::DatabaseError(DatabaseError::InitializationFailed(
+            "Settings not initialized".to_string(),
+        ))
+    })?;
+
+    let mut settings = settings_arc.lock().map_err(|_| {
+        JarvisError::DatabaseError(DatabaseError::WriteError(
+            "Failed to lock settings for update".to_string(),
+        ))
+    })?;
+
+    let result = writer(&mut *settings)?;
+    let updated = settings.clone();
+    drop(settings);
+
+    save_settings(&updated)?;
+
+    Ok(result)
+}
+
+/// Retrieve a single setting value as a strongly typed JSON value.
+pub fn get_setting_value(key: &str) -> JarvisResult<Option<Value>> {
+    with_settings(|settings| read_setting_value(settings, key))
+}
+
+/// Update a single setting with a strongly typed JSON value.
+pub fn set_setting_value(key: &str, value: Value) -> JarvisResult<()> {
+    let key = key.to_string();
+    with_settings_mut(move |settings| {
+        apply_setting_value(settings, &key, &value)?;
+        settings.touch();
+        Ok(())
+    })
+}
+
+fn read_setting_value(settings: &structs::Settings, key: &str) -> Option<Value> {
+    match key {
+        "assistant_voice" => Some(Value::String(settings.voice.clone())),
+        "selected_microphone" => Some(serde_json::json!(settings.microphone)),
+        "selected_speaker" => Some(serde_json::json!(settings.speaker)),
+        "selected_wake_word_engine" => {
+            Some(Value::String(format!("{:?}", settings.wake_word_engine)))
+        }
+        "speech_to_text_engine" => {
+            Some(Value::String(format!("{:?}", settings.speech_to_text_engine)))
+        }
+        "api_key_picovoice" | "api_key__picovoice" => {
+            Some(Value::String(settings.api_keys.picovoice.clone()))
+        }
+        "api_key_openai" => Some(Value::String(settings.api_keys.openai.clone())),
+        "api_key_openrouter" => Some(Value::String(settings.api_keys.openrouter.clone())),
+        "ai_model" => Some(Value::String(settings.ai_config.preferred_model.clone())),
+        "ai_temperature" => Some(serde_json::json!(settings.ai_config.temperature)),
+        "ai_max_tokens" => Some(serde_json::json!(settings.ai_config.max_tokens)),
+        "enable_conversation_mode" => {
+            Some(serde_json::json!(settings.ai_config.enable_conversation_mode))
+        }
+        "enable_document_search" => Some(serde_json::json!(
+            settings.advanced_settings.enable_document_search
+        )),
+        "auto_open_documents" => Some(serde_json::json!(
+            settings.advanced_settings.auto_open_documents
+        )),
+        "device_monitoring" => Some(serde_json::json!(
+            settings.advanced_settings.device_monitoring
+        )),
+        "tts_engine" => Some(Value::String(format!("{:?}", settings.tts_config.engine))),
+        "tts_voice" => Some(Value::String(settings.tts_config.voice_id.clone())),
+        "tts_speed" => Some(serde_json::json!(settings.tts_config.speed)),
+        "tts_volume" => Some(serde_json::json!(settings.tts_config.volume)),
+        _ => None,
+    }
+}
+
+fn apply_setting_value(
+    settings: &mut structs::Settings,
+    key: &str,
+    value: &Value,
+) -> JarvisResult<()> {
+    match key {
+        "assistant_voice" => {
+            let voice = value_as_string(value).ok_or_else(|| {
+                JarvisError::DatabaseError(DatabaseError::WriteError(
+                    "assistant_voice".to_string(),
+                ))
+            })?;
+            settings.voice = voice;
+        }
+        "selected_microphone" => {
+            let index = value_as_i32(value).ok_or_else(|| {
+                JarvisError::DatabaseError(DatabaseError::WriteError(
+                    "selected_microphone".to_string(),
+                ))
+            })?;
+            settings.microphone = index;
+        }
+        "selected_speaker" => {
+            let index = value_as_i32(value).ok_or_else(|| {
+                JarvisError::DatabaseError(DatabaseError::WriteError(
+                    "selected_speaker".to_string(),
+                ))
+            })?;
+            settings.speaker = index;
+        }
+        "selected_wake_word_engine" => {
+            if let Some(engine) = value_as_string(value) {
+                let normalized = engine.to_lowercase();
+                settings.wake_word_engine = match normalized.as_str() {
+                    "rustpotter" => config::structs::WakeWordEngine::Rustpotter,
+                    "vosk" => config::structs::WakeWordEngine::Vosk,
+                    "porcupine" | "picovoice" => config::structs::WakeWordEngine::Porcupine,
+                    _ => settings.wake_word_engine,
+                };
+            }
+        }
+        "speech_to_text_engine" => {
+            if let Some(engine) = value_as_string(value) {
+                let normalized = engine.to_lowercase();
+                settings.speech_to_text_engine = match normalized.as_str() {
+                    "vosk" => config::structs::SpeechToTextEngine::Vosk,
+                    _ => settings.speech_to_text_engine.clone(),
+                };
+            }
+        }
+        "api_key_picovoice" | "api_key__picovoice" => {
+            let api_key = value_as_string(value).ok_or_else(|| {
+                JarvisError::DatabaseError(DatabaseError::WriteError(
+                    "api_key_picovoice".to_string(),
+                ))
+            })?;
+            settings.api_keys.picovoice = api_key;
+        }
+        "api_key_openai" => {
+            let api_key = value_as_string(value).ok_or_else(|| {
+                JarvisError::DatabaseError(DatabaseError::WriteError(
+                    "api_key_openai".to_string(),
+                ))
+            })?;
+            settings.api_keys.openai = api_key;
+        }
+        "api_key_openrouter" => {
+            let api_key = value_as_string(value).ok_or_else(|| {
+                JarvisError::DatabaseError(DatabaseError::WriteError(
+                    "api_key_openrouter".to_string(),
+                ))
+            })?;
+            settings.api_keys.openrouter = api_key;
+        }
+        "ai_model" => {
+            let model = value_as_string(value).ok_or_else(|| {
+                JarvisError::DatabaseError(DatabaseError::WriteError("ai_model".to_string()))
+            })?;
+            settings.ai_config.preferred_model = model;
+        }
+        "ai_temperature" => {
+            let temperature = value_as_f32(value).ok_or_else(|| {
+                JarvisError::DatabaseError(DatabaseError::WriteError(
+                    "ai_temperature".to_string(),
+                ))
+            })?;
+            settings.ai_config.temperature = temperature;
+        }
+        "ai_max_tokens" => {
+            let max_tokens = value_as_u32(value).ok_or_else(|| {
+                JarvisError::DatabaseError(DatabaseError::WriteError(
+                    "ai_max_tokens".to_string(),
+                ))
+            })?;
+            settings.ai_config.max_tokens = max_tokens;
+        }
+        "enable_conversation_mode" => {
+            let enabled = value_as_bool(value).ok_or_else(|| {
+                JarvisError::DatabaseError(DatabaseError::WriteError(
+                    "enable_conversation_mode".to_string(),
+                ))
+            })?;
+            settings.ai_config.enable_conversation_mode = enabled;
+        }
+        "enable_document_search" => {
+            let enabled = value_as_bool(value).ok_or_else(|| {
+                JarvisError::DatabaseError(DatabaseError::WriteError(
+                    "enable_document_search".to_string(),
+                ))
+            })?;
+            settings.advanced_settings.enable_document_search = enabled;
+        }
+        "auto_open_documents" => {
+            let enabled = value_as_bool(value).ok_or_else(|| {
+                JarvisError::DatabaseError(DatabaseError::WriteError(
+                    "auto_open_documents".to_string(),
+                ))
+            })?;
+            settings.advanced_settings.auto_open_documents = enabled;
+        }
+        "device_monitoring" => {
+            let enabled = value_as_bool(value).ok_or_else(|| {
+                JarvisError::DatabaseError(DatabaseError::WriteError(
+                    "device_monitoring".to_string(),
+                ))
+            })?;
+            settings.advanced_settings.device_monitoring = enabled;
+        }
+        "tts_engine" => {
+            if let Some(engine) = value_as_string(value) {
+                let normalized = engine.to_lowercase();
+                settings.tts_config.engine = match normalized.as_str() {
+                    "system" => structs::TtsEngine::System,
+                    "openai" => structs::TtsEngine::OpenAI,
+                    "elevenlabs" => structs::TtsEngine::ElevenLabs,
+                    "local" => structs::TtsEngine::Local,
+                    _ => settings.tts_config.engine.clone(),
+                };
+            }
+        }
+        "tts_voice" => {
+            let voice = value_as_string(value).ok_or_else(|| {
+                JarvisError::DatabaseError(DatabaseError::WriteError("tts_voice".to_string()))
+            })?;
+            settings.tts_config.voice_id = voice;
+        }
+        "tts_speed" => {
+            let speed = value_as_f32(value).ok_or_else(|| {
+                JarvisError::DatabaseError(DatabaseError::WriteError("tts_speed".to_string()))
+            })?;
+            settings.tts_config.speed = speed;
+        }
+        "tts_volume" => {
+            let volume = value_as_f32(value).ok_or_else(|| {
+                JarvisError::DatabaseError(DatabaseError::WriteError("tts_volume".to_string()))
+            })?;
+            settings.tts_config.volume = volume;
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
+fn value_as_string(value: &Value) -> Option<String> {
+    match value {
+        Value::String(s) => Some(s.clone()),
+        Value::Null => Some(String::new()),
+        _ => None,
+    }
+}
+
+fn value_as_bool(value: &Value) -> Option<bool> {
+    match value {
+        Value::Bool(b) => Some(*b),
+        Value::String(s) => s.parse::<bool>().ok(),
+        _ => None,
+    }
+}
+
+fn value_as_i32(value: &Value) -> Option<i32> {
+    match value {
+        Value::Number(n) => n.as_i64().map(|v| v as i32),
+        Value::String(s) => s.parse::<i32>().ok(),
+        _ => None,
+    }
+}
+
+fn value_as_u32(value: &Value) -> Option<u32> {
+    match value {
+        Value::Number(n) => n.as_u64().map(|v| v as u32),
+        Value::String(s) => s.parse::<u32>().ok(),
+        _ => None,
+    }
+}
+
+fn value_as_f32(value: &Value) -> Option<f32> {
+    match value {
+        Value::Number(n) => n.as_f64().map(|v| v as f32),
+        Value::String(s) => s.parse::<f32>().ok(),
+        _ => None,
     }
 }
 

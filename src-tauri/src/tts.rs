@@ -99,12 +99,10 @@ pub fn init() -> JarvisResult<()> {
 /// Определение лучшего доступного TTS движка
 fn detect_best_engine() -> JarvisResult<TtsEngine> {
     // Проверяем OpenAI API ключ
-    if let Some(settings) = db::get_current_settings() {
-        if !settings.api_keys.openai.trim().is_empty() {
-            info!("OpenAI API key found, testing OpenAI TTS...");
-            if test_openai_tts().is_ok() {
-                return Ok(TtsEngine::OpenAI);
-            }
+    if let Ok(true) = db::with_settings(|settings| !settings.api_keys.openai.trim().is_empty()) {
+        info!("OpenAI API key found, testing OpenAI TTS...");
+        if test_openai_tts().is_ok() {
+            return Ok(TtsEngine::OpenAI);
         }
     }
 
@@ -174,18 +172,19 @@ fn test_system_tts() -> JarvisResult<()> {
 /// Тест OpenAI TTS
 fn test_openai_tts() -> JarvisResult<()> {
     // Получаем API ключ
-    let api_key = db::get_current_settings()
-        .and_then(|settings| {
-            let key = settings.api_keys.openai.trim();
-            if key.is_empty() {
-                None
-            } else {
-                Some(key.to_string())
-            }
-        })
-        .ok_or_else(|| JarvisError::AudioError(AudioError::InitializationFailed(
-            "OpenAI API key not found".to_string()
-        )))?;
+    let api_key = db::with_settings(|settings| {
+        let key = settings.api_keys.openai.trim();
+        if key.is_empty() {
+            None
+        } else {
+            Some(key.to_string())
+        }
+    })?
+        .ok_or_else(|| {
+            JarvisError::AudioError(AudioError::InitializationFailed(
+                "OpenAI API key not found".to_string(),
+            ))
+        })?;
 
     // Простой тест API (здесь можно добавить реальный HTTP запрос)
     if api_key.len() < 20 {
@@ -201,15 +200,21 @@ fn test_openai_tts() -> JarvisResult<()> {
 fn load_voice_settings() -> JarvisResult<VoiceSettings> {
     let mut settings = VoiceSettings::default();
 
-    if let Some(stored) = db::get_current_settings() {
-        if !stored.voice.is_empty() {
-            settings.voice_id = stored.voice.clone();
+    if let Ok((voice, speed, volume, language)) = db::with_settings(|stored| {
+        (
+            stored.voice.clone(),
+            stored.tts_config.speed,
+            stored.tts_config.volume,
+            stored.tts_config.language.clone(),
+        )
+    }) {
+        if !voice.is_empty() {
+            settings.voice_id = voice;
         }
 
-        // Здесь можно добавить загрузку других настроек из БД
-        settings.speed = stored.tts_config.speed;
-        settings.volume = stored.tts_config.volume;
-        settings.language = stored.tts_config.language;
+        settings.speed = speed;
+        settings.volume = volume;
+        settings.language = language;
     }
 
     Ok(settings)
@@ -418,18 +423,19 @@ fn speak_system(text: &str, settings: &VoiceSettings) -> JarvisResult<()> {
 
 /// OpenAI TTS
 fn speak_openai(text: &str, settings: &VoiceSettings) -> JarvisResult<()> {
-    let api_key = db::get_current_settings()
-        .and_then(|settings_data| {
-            let key = settings_data.api_keys.openai.trim();
-            if key.is_empty() {
-                None
-            } else {
-                Some(key.to_string())
-            }
-        })
-        .ok_or_else(|| JarvisError::AudioError(AudioError::PlaybackFailed(
-            "OpenAI API key not found".to_string()
-        )))?;
+    let api_key = db::with_settings(|settings_data| {
+        let key = settings_data.api_keys.openai.trim();
+        if key.is_empty() {
+            None
+        } else {
+            Some(key.to_string())
+        }
+    })?
+        .ok_or_else(|| {
+            JarvisError::AudioError(AudioError::PlaybackFailed(
+                "OpenAI API key not found".to_string(),
+            ))
+        })?;
 
     // Создаем JSON payload для OpenAI TTS API
     let payload = serde_json::json!({
